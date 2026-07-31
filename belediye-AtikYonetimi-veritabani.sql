@@ -306,6 +306,7 @@ CREATE TABLE sikayetler (
     durum sikayet_durumu NOT NULL DEFAULT 'bekliyor',
     yonetici_notu TEXT,
     cozulme_tarihi TIMESTAMPTZ,
+    aktif_mi BOOLEAN NOT NULL DEFAULT TRUE,
     tarih_saat TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -359,7 +360,9 @@ CREATE TABLE geri_donusum_talepleri (
             (gonderen_tipi = 'vatandas' AND sirket_id IS NULL)
             OR
             (gonderen_tipi = 'yonetici')
-        )
+        ),
+    CONSTRAINT chk_tahmini_miktar_pozitif
+        CHECK (tahmini_miktar IS NULL OR tahmini_miktar > 0)
 );
 
 
@@ -390,11 +393,17 @@ CREATE INDEX idx_sikayet_tarih ON sikayetler(tarih_saat);
 CREATE INDEX idx_sikayet_durum ON sikayetler(durum);
 CREATE INDEX idx_sikayet_konteyner ON sikayetler(konteyner_id);
 CREATE INDEX idx_sikayet_foto_sikayet ON sikayet_fotograflari(sikayet_id);
+CREATE INDEX idx_sikayet_aktif_tarih ON sikayetler(aktif_mi, tarih_saat DESC);
 
 -- Geri dönüşüm talepleri
 CREATE INDEX idx_gdtalep_durum ON geri_donusum_talepleri(durum);
 CREATE INDEX idx_gdtalep_tarih ON geri_donusum_talepleri(tarih_saat);
 CREATE INDEX idx_gdtalep_sirket ON geri_donusum_talepleri(sirket_id);
+CREATE INDEX idx_gdtalep_sirket_durum_tarih ON geri_donusum_talepleri(sirket_id, durum, tarih_saat DESC);
+CREATE INDEX idx_toplama_sofor_tarih ON toplama_kayitlari(sofor_id, tarih_saat DESC);
+
+CREATE UNIQUE INDEX unique_sirket_mail_lower ON sirketler(LOWER(mail));
+CREATE UNIQUE INDEX unique_yonetici_kullanici_adi_lower ON yoneticiler(LOWER(kullanici_adi));
 
 
 -- =========================================================
@@ -580,15 +589,3 @@ INSERT INTO geri_donusum_talepleri (sirket_id, konteyner_id, gonderen_tipi, gond
 -- 🔧 [Madde 8] gonderen_tipi = 'sirket' olduğu için sirket_id DOLU.
 INSERT INTO geri_donusum_talepleri (sirket_id, gonderen_tipi, gonderen_ad, gonderen_telefon, atik_turu, talep_basligi, talep_aciklamasi, tahmini_miktar, adres, durum) VALUES
 (1, 'sirket', 'Çevik Geri Dönüşüm A.Ş.', '03441112233', 'geri_donusum', 'Depo temizliği kağıt/karton', 'Depomuzda biriken kağıt/karton atığın alınmasını rica ediyoruz.', 250.50, 'Tekerek Mah. No:12 Onikişubat', 'bekliyor');
-
-
--- =========================================================
--- 11_TEST_SORGULARI.sql   [Madde 13]
--- Bu bölüm yalnızca geliştirme sırasında kontrol amaçlıdır; üretim
--- schema dosyasından ayrı tutulması önerilir.
--- =========================================================
-SELECT * FROM soforler;
-SELECT * FROM araclar;
-SELECT * FROM konteynerler;
-SELECT * FROM sikayetler;
-SELECT * FROM geri_donusum_talepleri;
