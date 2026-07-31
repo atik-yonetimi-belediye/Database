@@ -1,0 +1,56 @@
+name: Veritabanı kalite kontrolleri
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: belediye_atik
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d belediye_atik"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Şemayı ve örnek veriyi kur
+        run: psql -h 127.0.0.1 -U postgres -d belediye_atik -v ON_ERROR_STOP=1 -f belediye-AtikYonetimi-veritabani.sql
+      - name: Sürüm migration dosyalarını uygula
+        run: for file in migrations/*.sql; do psql -h 127.0.0.1 -U postgres -d belediye_atik -v ON_ERROR_STOP=1 -f "$file"; done
+      - name: Temel bütünlük kontrolleri
+        run: |
+          test "$(psql -h 127.0.0.1 -U postgres -d belediye_atik -Atc "SELECT COUNT(*) FROM mahalleler")" -ge 1
+          test "$(psql -h 127.0.0.1 -U postgres -d belediye_atik -Atc "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'")" -ge 10
+          test "$(psql -h 127.0.0.1 -U postgres -d belediye_atik -Atc "SELECT COUNT(*) FROM account_identifiers")" -ge 1
+      - name: Yedek al ve boş veritabanına geri yükle
+        run: |
+          pg_dump -h 127.0.0.1 -U postgres -d belediye_atik -Fc -f /tmp/belediye_atik.dump
+          createdb -h 127.0.0.1 -U postgres belediye_atik_restore
+          pg_restore -h 127.0.0.1 -U postgres -d belediye_atik_restore --exit-on-error /tmp/belediye_atik.dump
+          source_count="$(psql -h 127.0.0.1 -U postgres -d belediye_atik -Atc "SELECT COUNT(*) FROM mahalleler")"
+          restore_count="$(psql -h 127.0.0.1 -U postgres -d belediye_atik_restore -Atc "SELECT COUNT(*) FROM mahalleler")"
+          test "$source_count" = "$restore_count"
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
