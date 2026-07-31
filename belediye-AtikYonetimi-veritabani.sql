@@ -252,6 +252,7 @@ CREATE TABLE toplama_kayitlari (
     durum toplama_durumu NOT NULL,
     sebep VARCHAR(255),          -- yalnızca durum = 'atlanildi' iken dolu
     diger_aciklama TEXT,         -- sebep 'Diğer' seçilirse burası dolar
+    idempotency_key VARCHAR(64), -- çevrimdışı tekrar gönderimlerinde çift kaydı engeller
     tarih_saat TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -387,6 +388,9 @@ CREATE INDEX idx_toplama_tarih ON toplama_kayitlari(tarih_saat);
 CREATE INDEX idx_toplama_sofor ON toplama_kayitlari(sofor_id);
 CREATE INDEX idx_toplama_konteyner ON toplama_kayitlari(konteyner_id);
 CREATE INDEX idx_toplama_durum ON toplama_kayitlari(durum);
+CREATE UNIQUE INDEX unique_toplama_sofor_idempotency
+    ON toplama_kayitlari(sofor_id, idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
 
 -- Şikayetler
 CREATE INDEX idx_sikayet_tarih ON sikayetler(tarih_saat);
